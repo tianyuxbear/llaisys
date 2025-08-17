@@ -32,6 +32,8 @@ public:
     size_t ndim() const;
     const std::vector<size_t> &shape() const;
     const std::vector<ptrdiff_t> &strides() const;
+    size_t dim(size_t i) const;
+    ptrdiff_t stride(size_t i) const;
     llaisysDataType_t dtype() const;
     llaisysDeviceType_t deviceType() const;
     int deviceId() const;
@@ -44,6 +46,8 @@ public:
     bool isContiguous() const;
 
     // Meta Transform
+    tensor_t dimMerge(size_t dim_start, size_t dim_end) const;
+    tensor_t dimSplit(size_t axis, const std::vector<size_t>& dims) const;
     tensor_t permute(const std::vector<size_t> &order) const;
     tensor_t slice(size_t dim, size_t start, size_t end) const;
     tensor_t view(const std::vector<size_t> &shape) const;
