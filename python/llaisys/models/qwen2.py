@@ -1,23 +1,49 @@
-from typing import Sequence
-from ..libllaisys import LIB_LLAISYS
-from ..libllaisys import DeviceType
-
+import json
+import os
+from ctypes import byref, c_int
 from pathlib import Path
+from typing import Sequence
+
 import safetensors
+
+from ..libllaisys import (
+    LIB_LLAISYS,
+    DeviceType,
+    Qwen2MetaCStruct,
+    Qwen2WeightsCStruct,
+    Qwen2WeightsNaming,
+)
 
 
 class Qwen2:
-
     def __init__(self, model_path, device: DeviceType = DeviceType.CPU):
         # TODO: Implement model constructor
-
         model_path = Path(model_path)
 
+        # load config
+        with open(os.path.join(model_path, "config.json"), "r") as f:
+            config = json.load(f)
+            self.config = config
+
+        # load weights
         for file in sorted(model_path.glob("*.safetensors")):
-            data_ = safetensors.safe_open(file, framework="numpy", device="cpu")
+            state_dict = {}
+            data_ = safetensors.safe_open(file, framework="pytorch", device="cpu")
             for name_ in data_.keys():
                 ## TODO: load the model weights
-                pass
+                state_dict[name_] = data_.get_tensor(name_)
+
+        # create model
+        naming = Qwen2WeightsNaming()
+        if naming.match(state_dict):
+            print("naming")
+            ndev = 1
+            dev_ids = (c_int * ndev)(*[i for i in range(ndev)])
+            self.meta = Qwen2MetaCStruct(config)
+            self.weights = Qwen2WeightsCStruct(self.meta, state_dict, naming, ndev)
+            self.model = LIB_LLAISYS.llaisysQwen2ModelCreate(
+                byref(self.meta), byref(self.weights), device, dev_ids, ndev
+            )
 
     def generate(
         self,
@@ -27,7 +53,6 @@ class Qwen2:
         top_p: float = 0.8,
         temperature: float = 0.8,
     ):
-
         # TODO: Implement generate function
 
         return []
