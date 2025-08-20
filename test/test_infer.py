@@ -46,7 +46,10 @@ def hf_infer(
         add_generation_prompt=True,
         tokenize=False,
     )
+    print("intput_content: ", input_content)
     inputs = tokenizer.encode(input_content, return_tensors="pt").to(model.device)
+    print("inputs: ", inputs)
+
     with torch.no_grad():
         outputs = model.generate(
             inputs,
@@ -72,7 +75,9 @@ def llaisys_infer(
         add_generation_prompt=True,
         tokenize=False,
     )
+    print("intput_content: ", input_content)
     inputs = tokenizer.encode(input_content)
+    print("inputs: ", inputs)
     outputs = model.generate(
         inputs,
         max_new_tokens=max_new_tokens,
@@ -105,15 +110,15 @@ if __name__ == "__main__":
 
     # Example prompt
     start_time = time.time()
-    tokens, output = hf_infer(
-        args.prompt,
-        tokenizer,
-        model,
-        max_new_tokens=args.max_steps,
-        top_p=top_p,
-        top_k=top_k,
-        temperature=temperature,
-    )
+    # tokens, output = hf_infer(
+    #     args.prompt,
+    #     tokenizer,
+    #     model,
+    #     max_new_tokens=args.max_steps,
+    #     top_p=top_p,
+    #     top_k=top_k,
+    #     temperature=temperature,
+    # )
     end_time = time.time()
 
     del model
@@ -121,9 +126,9 @@ if __name__ == "__main__":
 
     print("\n=== Answer ===\n")
     print("Tokens:")
-    print(tokens)
+    # print(tokens)
     print("\nContents:")
-    print(output)
+    # print(output)
     print("\n")
     print(f"Time elapsed: {(end_time - start_time):.2f}s\n")
 
