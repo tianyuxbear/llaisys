@@ -83,7 +83,7 @@ __C {
         delete model;
     }
 
-    __export int64_t llaisysQwen2ModelInfer(struct LlaisysQwen2Model * model, int64_t *token_ids, size_t ntoken) {
-        return 0;
+    __export void llaisysQwen2ModelInfer(struct LlaisysQwen2Model * model, int64_t *token_ids, size_t ntoken, float *last_logits) {
+        
     }
 }

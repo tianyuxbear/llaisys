@@ -271,5 +271,6 @@ def load_qwen2(lib):
         POINTER(Qwen2ModelCStruct),
         POINTER(c_long),
         c_size_t,
+        POINTER(c_float),
     ]
-    lib.llaisysQwen2ModelInfer.restype = c_long
+    lib.llaisysQwen2ModelInfer.restype = None
