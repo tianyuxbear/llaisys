@@ -2,6 +2,7 @@
 
 #include "../utils.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <numeric>
 #include <sstream>
@@ -54,6 +55,14 @@ const std::vector<size_t> &Tensor::shape() const {
 
 const std::vector<ptrdiff_t> &Tensor::strides() const {
     return _meta.strides;
+}
+
+size_t Tensor::dim(size_t i) const {
+    return _meta.shape[i];
+}
+
+ptrdiff_t Tensor::stride(size_t i) const {
+    return _meta.strides[i];
 }
 
 llaisysDataType_t Tensor::dtype() const {
@@ -164,27 +173,150 @@ void Tensor::debug() const {
 }
 
 bool Tensor::isContiguous() const {
-    TO_BE_IMPLEMENTED();
+    auto m_shape = _meta.shape;
+    auto m_strides = _meta.strides;
+
+    size_t ndim_ = m_shape.size();
+    std::vector<ptrdiff_t> c_strides(ndim_);
+    ptrdiff_t stride = 1;
+    for (size_t i = 1; i <= ndim_; i++) {
+        if (m_strides[ndim_ - i] != stride) {
+            return false;
+        }
+        stride *= m_shape[ndim_ - i];
+    }
+
     return true;
 }
 
+tensor_t Tensor::dimMerge(size_t dim_start, size_t dim_end) const {
+    CHECK_ARGUMENT(dim_start <= dim_end && dim_end < ndim(), "dim_start and dim_end must be in right range");
+
+    size_t new_ndim = ndim() - (dim_end - dim_start);
+    std::vector<size_t> new_shape(new_ndim);
+    std::vector<ptrdiff_t> new_strides(new_ndim);
+    size_t index = 0;
+
+    for (size_t i = 0; i < dim_start; i++) {
+        new_shape[index] = dim(i);
+        new_strides[index] = stride(i);
+        index++;
+    }
+
+    new_shape[index] = 1;
+    for (size_t i = dim_start; i <= dim_end; i++) {
+        new_shape[index] *= dim(i);
+    }
+
+    new_strides[index] = stride(dim_end);
+    index++;
+
+    for (size_t i = dim_end + 1; i < ndim(); i++) {
+        new_shape[index] = dim(i);
+        new_strides[index] = stride(i);
+        index++;
+    }
+
+    TensorMeta new_meta{_meta.dtype, new_shape, new_strides};
+
+    return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage));
+}
+
+tensor_t Tensor::dimSplit(size_t axis, const std::vector<size_t> &dims) const {
+    size_t ndim_ = ndim();
+
+    CHECK_ARGUMENT(dim(axis) == std::accumulate(dims.begin(), dims.end(), (size_t)1, std::multiplies<size_t>()), "axis and dims must be in right range");
+
+    size_t new_ndim = ndim_ + dims.size() - 1;
+    std::vector<size_t> new_shape(new_ndim);
+    std::vector<ptrdiff_t> new_strides(new_ndim);
+    size_t index = 0;
+    for (size_t i = 0; i < axis; i++) {
+        new_shape[index] = dim(i);
+        new_strides[index] = stride(i);
+        index++;
+    }
+    for (size_t i = 0; i < dims.size(); i++) {
+        new_shape[index] = dims[i];
+        new_strides[index] = stride(axis) * dim(axis) / std::accumulate(dims.begin(), dims.begin() + i + 1, (size_t)1, std::multiplies<size_t>());
+        index++;
+    }
+    for (size_t i = axis + 1; i < ndim_; i++) {
+        new_shape[index] = dim(i);
+        new_strides[index] = stride(i);
+        index++;
+    }
+
+    TensorMeta new_meta{_meta.dtype, new_shape, new_strides};
+
+    return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage));
+}
+
 tensor_t Tensor::permute(const std::vector<size_t> &order) const {
-    TO_BE_IMPLEMENTED();
-    return std::shared_ptr<Tensor>(new Tensor(_meta, _storage));
+    auto ndim_ = ndim();
+    CHECK_ARGUMENT(order.size() == ndim_, "order.size() must be equal to ndim");
+    std::vector<size_t> new_shape(ndim_);
+    std::vector<ptrdiff_t> new_strides(ndim_);
+    for (size_t i = 0; i < ndim_; i++) {
+        CHECK_ARGUMENT(std::find(order.begin(), order.end(), i) != order.end(), "permute is given a bad order");
+        new_shape[i] = dim(order[i]);
+        new_strides[i] = stride(order[i]);
+    }
+
+    TensorMeta new_meta{_meta.dtype, new_shape, new_strides};
+
+    return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage));
 }
 
 tensor_t Tensor::view(const std::vector<size_t> &shape) const {
-    TO_BE_IMPLEMENTED();
-    return std::shared_ptr<Tensor>(new Tensor(_meta, _storage));
+    // Check contiguous and shape compatibility
+    if (!this->isContiguous()) {
+        throw std::runtime_error("view() requires contiguous tensor");
+    }
+    size_t new_numel = 1;
+    for (auto dim : shape) {
+        new_numel *= dim;
+    }
+    if (new_numel != this->numel()) {
+        throw std::runtime_error("view() shape is incompatible with number of elements");
+    }
+    // Construct new tensor meta
+    std::vector<ptrdiff_t> new_strides(shape.size());
+    size_t stride = 1;
+    for (int i = static_cast<int>(shape.size()) - 1; i >= 0; --i) {
+        new_strides[i] = stride;
+        stride *= shape[i];
+    }
+    TensorMeta new_meta = this->_meta;
+    new_meta.shape = shape;
+    new_meta.strides = new_strides;
+    // Create new tensor, share storage
+    return std::shared_ptr<Tensor>(new Tensor(new_meta, this->_storage, this->_offset));
 }
 
 tensor_t Tensor::slice(size_t dim, size_t start, size_t end) const {
-    TO_BE_IMPLEMENTED();
-    return std::shared_ptr<Tensor>(new Tensor(_meta, _storage));
+    CHECK_ARGUMENT(dim < ndim() && start <= end && end <= _meta.shape[dim], "slice: bad arguments");
+    const size_t slice_size = end - start;
+
+    std::vector<size_t> new_shape = _meta.shape;
+    new_shape[dim] = slice_size;
+
+    std::vector<ptrdiff_t> new_strides = _meta.strides;
+    const size_t offset = static_cast<size_t>(_meta.strides[dim] * start * utils::dsize(_meta.dtype));
+
+    TensorMeta new_meta{_meta.dtype, new_shape, new_strides};
+
+    return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage, offset));
 }
 
 void Tensor::load(const void *src_) {
-    TO_BE_IMPLEMENTED();
+    llaisysDeviceType_t device_type = deviceType();
+    int device_id = deviceId();
+
+    if (device_type != core::context().runtime().deviceType() || device_id != core::context().runtime().deviceId()) {
+        core::context().setDevice(device_type, device_id);
+    }
+    core::context().runtime().api()->memcpy_sync(_storage->memory(), src_, _storage->size(), LLAISYS_MEMCPY_H2D);
 }
 
 tensor_t Tensor::contiguous() const {

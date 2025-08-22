@@ -41,7 +41,10 @@ def hf_infer(
         add_generation_prompt=True,
         tokenize=False,
     )
+    print("intput_content: ", input_content)
     inputs = tokenizer.encode(input_content, return_tensors="pt").to(model.device)
+    print("inputs: ", inputs)
+
     with torch.no_grad():
         outputs = model.generate(
             inputs,
@@ -67,7 +70,9 @@ def llaisys_infer(
         add_generation_prompt=True,
         tokenize=False,
     )
+    print("intput_content: ", input_content)
     inputs = tokenizer.encode(input_content)
+    print("inputs: ", inputs)
     outputs = model.generate(
         inputs,
         max_new_tokens=max_new_tokens,
