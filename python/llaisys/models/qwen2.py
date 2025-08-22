@@ -1,8 +1,9 @@
 import json
 import os
-from ctypes import byref, c_int
+from ctypes import byref, c_int, c_int64, c_size_t
 from pathlib import Path
 from typing import Sequence
+
 
 import safetensors
 
@@ -59,13 +60,37 @@ class Qwen2:
     ):
         tokens = list(inputs)
         max_len = len(tokens) + max_new_tokens
-        nlayer = self.meta.nlayer
-
         kvcache = LIB_LLAISYS.llaisysQwen2KVCacheCreate(self.model, max_len)
 
+        # prefill
+        print("Qwen2: prefilling...", flush=True)
+        ntoken = len(tokens)
+        token_ids = (c_int64 * ntoken)(*tokens)
+        past_len = c_size_t(0)
+        next_token = LIB_LLAISYS.llaisysQwen2ModelInfer(
+            self.model, token_ids, c_size_t(ntoken), kvcache, past_len
+        )
+        tokens.append(next_token)
+        print("current tokens: ", tokens, flush=True)
+
+        # decode
+        print("Qwen2: decoding...", flush=True)
+        for _ in range(max_new_tokens):
+            if next_token == self.meta.end_token:
+                break
+            ntoken = 1
+            token_ids = (c_int64 * 1)(next_token)
+            past_len = c_size_t(len(tokens) - 1)
+            next_token = LIB_LLAISYS.llaisysQwen2ModelInfer(
+                self.model, token_ids, ntoken, kvcache, past_len
+            )
+            tokens.append(next_token)
+            print("current tokens: ", tokens, flush=True)
+
+        nlayer = self.meta.nlayer
         LIB_LLAISYS.llaisysQwen2KVCacheDestroy(kvcache, nlayer)
 
-        return []
+        return tokens
 
     def __del__(self):
         LIB_LLAISYS.llaisysQwen2ModelDestroy(self.model)

@@ -11,7 +11,7 @@ void embedding_(T *out, const int64_t *index, const T *weight, size_t numel, siz
     size_t nlen = numel / len;
     for (size_t i = 0; i < nlen; i++) {
         int64_t idx = index[i];
-        std::memcpy(out + (i * len), weight + (idx * len), len);
+        std::memcpy(out + (i * len), weight + (idx * len), len * sizeof(T));
     }
 }
 

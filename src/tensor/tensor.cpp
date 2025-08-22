@@ -269,10 +269,29 @@ tensor_t Tensor::permute(const std::vector<size_t> &order) const {
 }
 
 tensor_t Tensor::view(const std::vector<size_t> &shape) const {
-    CHECK_ARGUMENT(numel() == std::accumulate(shape.begin(), shape.end(), size_t(1), std::multiplies<size_t>()), "view shape must have the same numel to origin");
-
-    tensor_t new_tensor = dimMerge(0, ndim() - 1);
-    return new_tensor->dimSplit(0, shape);
+    // Check contiguous and shape compatibility
+    if (!this->isContiguous()) {
+        throw std::runtime_error("view() requires contiguous tensor");
+    }
+    size_t new_numel = 1;
+    for (auto dim : shape) {
+        new_numel *= dim;
+    }
+    if (new_numel != this->numel()) {
+        throw std::runtime_error("view() shape is incompatible with number of elements");
+    }
+    // Construct new tensor meta
+    std::vector<ptrdiff_t> new_strides(shape.size());
+    size_t stride = 1;
+    for (int i = static_cast<int>(shape.size()) - 1; i >= 0; --i) {
+        new_strides[i] = stride;
+        stride *= shape[i];
+    }
+    TensorMeta new_meta = this->_meta;
+    new_meta.shape = shape;
+    new_meta.strides = new_strides;
+    // Create new tensor, share storage
+    return std::shared_ptr<Tensor>(new Tensor(new_meta, this->_storage, this->_offset));
 }
 
 tensor_t Tensor::slice(size_t dim, size_t start, size_t end) const {
